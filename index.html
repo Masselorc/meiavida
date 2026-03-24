@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparador de Meia-vida</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (Para compilar o JSX e o TypeScript direto no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react,typescript">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- Ícones (Convertidos para SVG inline para não depender de pacotes npm) ---
+        const Icons = {
+            Activity: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
+            Clock: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+            Beaker: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 3h15"/><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"/><path d="M6 14h12"/></svg>,
+            BarChart2: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+            Play: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
+            RotateCcw: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>,
+            Plus: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Trash2: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+            ListChecks: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>,
+            Pill: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>,
+            Layers: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>,
+            AlertCircle: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+            Percent: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
+            Timer: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></svg>,
+            TrendingDown: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>
+        };
+
+        // --- Tipagens (Opcional no Babel, mas mantidas por segurança) ---
+        // type MassUnit = 'mcg' | 'mg' | 'g';
+        // type TimeUnit = 'minutes' | 'hours' | 'days';
+
+        const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+        const getDefaultTime = () => {
+            const d = new Date();
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            return d.toISOString().slice(0, 16);
+        };
+
+        // --- Funções Auxiliares Matemáticas ---
+        const getHalfLifeMs = (time, unit) => {
+            const val = parseFloat(time);
+            if (isNaN(val)) return 0;
+            if (unit === 'hours') return val * 60 * 60 * 1000;
+            if (unit === 'minutes') return val * 60 * 1000;
+            if (unit === 'days') return val * 24 * 60 * 60 * 1000;
+            return val;
+        };
+
+        const getQuantityAt = (timestamp, doses, hLMs) => {
+            return doses.reduce((sum, d) => {
+                if (timestamp >= d.time && hLMs > 0) {
+                return sum + d.amount * Math.pow(0.5, (timestamp - d.time) / hLMs);
+                }
+                return sum;
+            }, 0);
+        };
+
+        const formatFriendlyDate = (ts) => {
+            if (!ts) return "--";
+            const date = new Date(ts);
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            if (date.toDateString() === today.toDateString()) return `Hoje, ${timeStr}`;
+            if (date.toDateString() === tomorrow.toDateString()) return `Amanhã, ${timeStr}`;
+            
+            return `${date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })}, ${timeStr}`;
+        };
+
+        const formatDuration = (ms) => {
+            if (ms < 0) return "0h 0m";
+            const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+            
+            const parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0 || days > 0) parts.push(`${hours}h`);
+            parts.push(`${minutes}m`);
+            return parts.join(' ');
+        };
+
+        function App() {
+            const [isRunning, setIsRunning] = useState(false);
+            const [now, setNow] = useState(Date.now());
+            
+            // State Global de Cenários
+            const [scenarios, setScenarios] = useState([{
+                id: crypto.randomUUID(),
+                name: 'Substância A',
+                color: PALETTE[0],
+                halfLifeTime: '',
+                halfLifeUnit: 'hours',
+                unit: 'mg',
+                doses: [{ id: crypto.randomUUID(), amount: '', time: getDefaultTime() }]
+            }]);
+
+            // State para os formulários rápidos de Inclusão de Dose no Dashboard
+            const [quickAdd, setQuickAdd] = useState({});
+
+            // Loop de Animação
+            useEffect(() => {
+                if (!isRunning) return;
+                const intervalId = setInterval(() => setNow(Date.now()), 50);
+                return () => clearInterval(intervalId);
+            }, [isRunning]);
+
+            // --- Processamento Pesado (Memoizado) ---
+            const processedScenarios = useMemo(() => {
+                return scenarios.map(scenario => {
+                const hLMs = getHalfLifeMs(scenario.halfLifeTime, scenario.halfLifeUnit);
+                
+                const parsedDoses = scenario.doses
+                    .map(d => ({ amount: parseFloat(d.amount) || 0, time: new Date(d.time).getTime() }))
+                    .filter(d => d.amount > 0 && !isNaN(d.time))
+                    .sort((a, b) => a.time - b.time);
+
+                const totalIngested = parsedDoses.reduce((acc, d) => acc + d.amount, 0);
+                const firstDoseTime = parsedDoses.length > 0 ? parsedDoses[0].time : Date.now();
+                const lastDoseTime = parsedDoses.length > 0 ? parsedDoses[parsedDoses.length - 1].time : Date.now();
+
+                // Peak & Intervals
+                let peak = 0;
+                const intervals = [];
+                for (let i = 0; i < parsedDoses.length; i++) {
+                    const t_start = parsedDoses[i].time;
+                    const q_start = getQuantityAt(t_start, parsedDoses, hLMs);
+                    if (q_start > peak) peak = q_start;
+
+                    const t_end = i + 1 < parsedDoses.length ? parsedDoses[i+1].time : Infinity;
+                    const q_end = i + 1 < parsedDoses.length ? getQuantityAt(t_end - 1, parsedDoses, hLMs) : 0;
+                    intervals.push({ t_start, t_end, q_start, q_end });
+                }
+
+                // Current Stats
+                const qty = getQuantityAt(now, parsedDoses, hLMs);
+                const activeDose = [...parsedDoses].reverse().find(d => d.time <= now);
+                const isWaiting = !activeDose;
+                
+                let nextHalfLifeTs = null;
+                if (activeDose && hLMs > 0) {
+                    const elapsedSinceActive = Math.max(0, now - activeDose.time);
+                    const cycle = Math.floor(elapsedSinceActive / hLMs) + 1;
+                    nextHalfLifeTs = activeDose.time + (cycle * hLMs);
+                }
+
+                const percentRemaining = peak > 0 ? (qty / peak) * 100 : 0;
+                const percentEliminated = peak > 0 ? 100 - percentRemaining : 0;
+                const elapsedTotalMs = now > firstDoseTime ? now - firstDoseTime : 0;
+
+                // Milestones
+                const getFinalTimeForTarget = (targetQ) => {
+                    for (let i = intervals.length - 1; i >= 0; i--) {
+                    const interval = intervals[i];
+                    if (targetQ <= interval.q_start && targetQ > interval.q_end) {
+                        return interval.t_start + hLMs * Math.log2(interval.q_start / targetQ);
+                    }
+                    }
+                    return null;
+                };
+
+                const targets = [
+                    { label: '50% (1 Meia-vida)', perc: 50 },
+                    { label: '25% (2 Meias-vidas)', perc: 25 },
+                    { label: '12.5% (3 Meias-vidas)', perc: 12.5 },
+                    { label: '10%', perc: 10 },
+                    { label: '5%', perc: 5 },
+                    { label: '1%', perc: 1 },
+                    { label: '0.1% (Residual)', perc: 0.1 },
+                ];
+
+                const milestones = targets.map(t => ({
+                    label: t.label,
+                    percentage: t.perc,
+                    targetQuantity: peak * (t.perc / 100),
+                    timestamp: getFinalTimeForTarget(peak * (t.perc / 100))
+                }));
+
+                // Next Milestone Alert
+                const futureMilestones = milestones.filter(m => m.timestamp && m.timestamp > now);
+                const nextMilestone = futureMilestones.length > 0 ? futureMilestones[0] : null;
+
+                return {
+                    ...scenario,
+                    hLMs,
+                    parsedDoses,
+                    totalIngested,
+                    firstDoseTime,
+                    lastDoseTime,
+                    peak,
+                    qty,
+                    isWaiting,
+                    nextHalfLifeTs,
+                    percentRemaining,
+                    percentEliminated,
+                    elapsedTotalMs,
+                    milestones,
+                    nextMilestone
+                };
+                });
+            }, [scenarios, now]);
+
+            // --- SVG Graph Data ---
+            const { globalMaxXMs, globalMaxY, globalFirstTime } = useMemo(() => {
+                let minFirst = Infinity;
+                let maxLast = 0;
+                let maxPeak = 0;
+                let maxHLMs = 0;
+
+                processedScenarios.forEach(s => {
+                if (s.firstDoseTime < minFirst) minFirst = s.firstDoseTime;
+                if (s.lastDoseTime > maxLast) maxLast = s.lastDoseTime;
+                if (s.peak > maxPeak) maxPeak = s.peak;
+                if (s.hLMs > maxHLMs) maxHLMs = s.hLMs;
+                });
+
+                if (minFirst === Infinity) minFirst = Date.now();
+                return {
+                globalFirstTime: minFirst,
+                globalMaxXMs: Math.max(maxHLMs * 5, (maxLast + maxHLMs * 5) - minFirst),
+                globalMaxY: maxPeak * 1.1 || 100
+                };
+            }, [processedScenarios]);
+
+            const svgWidth = 800;
+            const svgHeight = 400;
+            const padding = 65;
+            const graphWidth = svgWidth - padding * 2;
+            const graphHeight = svgHeight - padding * 2;
+
+            const staticGraphElements = useMemo(() => {
+                if (processedScenarios.length === 0 || globalMaxY <= 0) return null;
+
+                // 1. Eixo Y
+                const yAxis = Array.from({ length: 5 }).map((_, i) => {
+                const y = padding + (graphHeight / 4) * i;
+                const val = globalMaxY * (1 - i / 4);
+                const labelVal = Number.isInteger(val) ? val : parseFloat(val.toFixed(1));
+                
+                return (
+                    <g key={`y-${i}`}>
+                    <line x1={padding} y1={y} x2={svgWidth - padding} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
+                    <text x={padding - 10} y={y} fill="#64748b" fontSize="11" fontFamily="Inter, sans-serif" textAnchor="end" alignmentBaseline="middle">
+                        {labelVal}
+                    </text>
+                    </g>
+                );
+                });
+
+                // 2. Curvas de Decaimento
+                const curves = processedScenarios.map((s) => {
+                if (s.hLMs <= 0 || s.peak <= 0) return null;
+                let pathD = "";
+                const steps = 300;
+                
+                const timePoints = new Set();
+                for (let i = 0; i <= steps; i++) {
+                    timePoints.add(globalFirstTime + (i / steps) * globalMaxXMs);
+                }
+                s.parsedDoses.forEach(d => {
+                    timePoints.add(d.time - 1);
+                    timePoints.add(d.time);
+                });
+
+                const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
+                
+                sortedTimePoints.forEach((t) => {
+                    if (t < globalFirstTime || t > globalFirstTime + globalMaxXMs) return;
+                    const q = getQuantityAt(t, s.parsedDoses, s.hLMs);
+                    const x = padding + ((t - globalFirstTime) / globalMaxXMs) * graphWidth;
+                    const y = padding + graphHeight - (q / globalMaxY) * graphHeight;
+                    
+                    if (pathD === "") pathD += `M ${x},${y} `;
+                    else pathD += `L ${x},${y} `;
+                });
+
+                return <path key={s.id} d={pathD} fill="none" stroke={s.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />;
+                });
+
+                return (
+                <React.Fragment>
+                    {yAxis}
+                    <polyline points={`${padding},${padding} ${padding},${svgHeight - padding} ${svgWidth - padding},${svgHeight - padding}`} fill="none" stroke="#94a3b8" strokeWidth="2" />
+                    {curves}
+                </React.Fragment>
+                );
+            }, [processedScenarios, globalMaxY, globalMaxXMs, globalFirstTime, graphWidth, graphHeight]);
+
+            // --- Handlers do Formulário Base ---
+            const handleAddScenario = () => {
+                setScenarios([...scenarios, {
+                id: crypto.randomUUID(),
+                name: `Substância ${String.fromCharCode(65 + scenarios.length)}`,
+                color: PALETTE[scenarios.length % PALETTE.length],
+                halfLifeTime: '',
+                halfLifeUnit: 'hours',
+                unit: 'mg',
+                doses: [{ id: crypto.randomUUID(), amount: '', time: getDefaultTime() }]
+                }]);
+            };
+
+            const handleRemoveScenario = (id) => {
+                if (scenarios.length === 1) return;
+                setScenarios(scenarios.filter(s => s.id !== id));
+            };
+
+            const handleUpdateScenario = (id, field, value) => {
+                setScenarios(scenarios.map(s => s.id === id ? { ...s, [field]: value } : s));
+            };
+
+            const handleAddDose = (scenarioId) => {
+                setScenarios(scenarios.map(s => {
+                if (s.id === scenarioId) {
+                    return { ...s, doses: [...s.doses, { id: crypto.randomUUID(), amount: '', time: getDefaultTime() }] };
+                }
+                return s;
+                }));
+            };
+
+            const handleUpdateDose = (scenarioId, doseId, field, value) => {
+                setScenarios(scenarios.map(s => {
+                if (s.id === scenarioId) {
+                    return { ...s, doses: s.doses.map(d => d.id === doseId ? { ...d, [field]: value } : d) };
+                }
+                return s;
+                }));
+            };
+
+            const handleRemoveDose = (scenarioId, doseId) => {
+                setScenarios(scenarios.map(s => {
+                if (s.id === scenarioId && s.doses.length > 1) {
+                    return { ...s, doses: s.doses.filter(d => d.id !== doseId) };
+                }
+                return s;
+                }));
+            };
+
+            const handleStart = (e) => {
+                e.preventDefault();
+                const isValid = scenarios.every(s => s.name && s.halfLifeTime && s.doses.every(d => d.amount && d.time));
+                if (!isValid) {
+                alert("Por favor, preencha todos os campos obrigatórios em todos os cenários.");
+                return;
+                }
+                
+                // Configura o state base para os formulários rápidos do dashboard
+                const initialQA = {};
+                scenarios.forEach(s => {
+                initialQA[s.id] = { amount: '', time: getDefaultTime() };
+                });
+                setQuickAdd(initialQA);
+                
+                setIsRunning(true);
+                setNow(Date.now());
+            };
+
+            // --- Handlers de Inclusão Rápida (Dashboard Ativo) ---
+            const handleQuickAddChange = (scenarioId, field, value) => {
+                setQuickAdd(prev => ({
+                ...prev,
+                [scenarioId]: {
+                    ...prev[scenarioId],
+                    [field]: value
+                }
+                }));
+            };
+
+            const handleSetQuickAddNow = (scenarioId) => {
+                setQuickAdd(prev => ({
+                ...prev,
+                [scenarioId]: {
+                    ...prev[scenarioId],
+                    time: getDefaultTime()
+                }
+                }));
+            };
+
+            const handleSubmitQuickAdd = (scenarioId) => {
+                const qa = quickAdd[scenarioId];
+                if (!qa || !qa.amount || !qa.time) return;
+
+                setScenarios(prevScenarios => prevScenarios.map(s => {
+                if (s.id === scenarioId) {
+                    return {
+                    ...s,
+                    doses: [...s.doses, { id: crypto.randomUUID(), amount: qa.amount, time: qa.time }]
+                    };
+                }
+                return s;
+                }));
+
+                // Reseta o formulário
+                setQuickAdd(prev => ({
+                ...prev,
+                [scenarioId]: { amount: '', time: getDefaultTime() }
+                }));
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
+                <div className="max-w-7xl mx-auto space-y-6">
+                    
+                    <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center space-x-3">
+                        <Icons.Layers className="w-8 h-8 text-blue-600" />
+                        <h1 className="text-3xl font-bold text-slate-900">Comparador de Meia-vida</h1>
+                    </div>
+                    {isRunning && (
+                        <button
+                        onClick={() => setIsRunning(false)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 transition shadow-sm"
+                        >
+                        <Icons.RotateCcw className="w-4 h-4" /> Editar Cenários
+                        </button>
+                    )}
+                    </div>
+
+                    {!isRunning ? (
+                    /* Formulário de Múltiplos Cenários */
+                    <form onSubmit={handleStart} className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {scenarios.map((scenario, sIndex) => (
+                            <div key={scenario.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: scenario.color }}></div>
+                                <input
+                                    type="text"
+                                    required
+                                    value={scenario.name}
+                                    onChange={(e) => handleUpdateScenario(scenario.id, 'name', e.target.value)}
+                                    placeholder="Nome do Cenário"
+                                    className="font-bold text-lg text-slate-800 bg-transparent outline-none border-b border-dashed border-slate-300 focus:border-blue-500 transition px-1"
+                                />
+                                </div>
+                                {scenarios.length > 1 && (
+                                <button type="button" onClick={() => handleRemoveScenario(scenario.id)} className="text-slate-400 hover:text-red-500 transition p-1">
+                                    <Icons.Trash2 className="w-5 h-5" />
+                                </button>
+                                )}
+                            </div>
+                            
+                            <div className="p-6 space-y-6">
+                                <div className="space-y-2">
+                                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                    <Icons.RotateCcw className="w-4 h-4" /> Tempo de Meia-vida
+                                </label>
+                                <div className="flex space-x-2">
+                                    <input
+                                    type="number" required step="any" min="0" placeholder="Ex: 5"
+                                    value={scenario.halfLifeTime}
+                                    onChange={(e) => handleUpdateScenario(scenario.id, 'halfLifeTime', e.target.value)}
+                                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                    />
+                                    <select
+                                    value={scenario.halfLifeUnit}
+                                    onChange={(e) => handleUpdateScenario(scenario.id, 'halfLifeUnit', e.target.value)}
+                                    className="px-4 py-2.5 rounded-lg border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition min-w-[110px]"
+                                    >
+                                    <option value="minutes">Min.</option>
+                                    <option value="hours">Horas</option>
+                                    <option value="days">Dias</option>
+                                    </select>
+                                </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                    <Icons.Pill className="w-4 h-4" /> Doses Base
+                                    </label>
+                                    <button type="button" onClick={() => handleAddDose(scenario.id)} className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition">
+                                    + Adicionar Dose
+                                    </button>
+                                </div>
+                                
+                                {scenario.doses.map((dose, dIndex) => (
+                                    <div key={dose.id} className="flex flex-col gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                    <div className="flex gap-2">
+                                        <input
+                                        type="number" required step="any" min="0" placeholder="Qtd"
+                                        value={dose.amount}
+                                        onChange={(e) => handleUpdateDose(scenario.id, dose.id, 'amount', e.target.value)}
+                                        className="w-1/2 px-3 py-2 text-sm rounded-md border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                        {dIndex === 0 ? (
+                                        <select
+                                            value={scenario.unit}
+                                            onChange={(e) => handleUpdateScenario(scenario.id, 'unit', e.target.value)}
+                                            className="w-1/2 px-2 py-2 text-sm rounded-md border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        >
+                                            <option value="mcg">mcg</option><option value="mg">mg</option><option value="g">g</option>
+                                        </select>
+                                        ) : (
+                                        <div className="w-1/2 px-3 py-2 text-sm rounded-md border border-slate-200 bg-slate-100 text-slate-500 flex items-center">{scenario.unit}</div>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                        type="datetime-local" required
+                                        value={dose.time}
+                                        onChange={(e) => handleUpdateDose(scenario.id, dose.id, 'time', e.target.value)}
+                                        className="flex-1 px-3 py-2 text-sm rounded-md border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                        {scenario.doses.length > 1 && (
+                                        <button type="button" onClick={() => handleRemoveDose(scenario.id, dose.id)} className="p-2 text-slate-400 hover:text-red-500 transition">
+                                            <Icons.Trash2 className="w-4 h-4" />
+                                        </button>
+                                        )}
+                                    </div>
+                                    </div>
+                                ))}
+                                </div>
+                            </div>
+                            </div>
+                        ))}
+                        
+                        {/* Add Scenario Card */}
+                        <button
+                            type="button"
+                            onClick={handleAddScenario}
+                            className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center p-8 transition min-h-[300px] text-slate-500 hover:text-blue-600"
+                        >
+                            <Icons.Plus className="w-10 h-10 mb-2" />
+                            <span className="font-bold text-lg">Adicionar Cenário Comparativo</span>
+                            <span className="text-sm mt-1 opacity-80">Compare dosagens ou substâncias diferentes</span>
+                        </button>
+                        </div>
+                        
+                        <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-5 rounded-xl shadow-md transition flex justify-center items-center gap-2 text-xl">
+                        <Icons.Play className="w-6 h-6" /> Iniciar Análise Comparativa
+                        </button>
+                    </form>
+                    ) : (
+                    /* Dashboard Ativo */
+                    <div className="space-y-6">
+                        
+                        {/* Gráfico Combinado */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                            <div className="flex items-center gap-2">
+                            <Icons.BarChart2 className="w-6 h-6 text-blue-600" />
+                            <h3 className="text-xl font-bold text-slate-800">Curvas de Decaimento</h3>
+                            </div>
+                            <div className="flex flex-wrap gap-4 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
+                            {processedScenarios.map(s => (
+                                <div key={s.id} className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: s.color }}></div>
+                                <span className="text-sm font-semibold text-slate-700">{s.name}</span>
+                                </div>
+                            ))}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 w-full bg-slate-50/50 rounded-xl border border-slate-100 flex items-center justify-center p-2 relative overflow-hidden">
+                            <svg 
+                            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                            className="w-full h-auto max-h-[450px]"
+                            style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.02))' }}
+                            >
+                            {staticGraphElements}
+
+                            {processedScenarios.map(s => {
+                                const isVisible = now >= globalFirstTime && now <= globalFirstTime + globalMaxXMs;
+                                if (!isVisible || s.hLMs <= 0) return null;
+
+                                const cx = padding + ((now - globalFirstTime) / globalMaxXMs) * graphWidth;
+                                const cy = padding + graphHeight - (s.qty / globalMaxY) * graphHeight;
+
+                                return (
+                                <g key={`current-${s.id}`} transform={`translate(${cx}, ${cy})`}>
+                                    <circle fill={s.color} opacity="0.3">
+                                    <animate attributeName="r" values="6;12;6" dur="1.5s" repeatCount="indefinite" />
+                                    </circle>
+                                    <circle r="5" fill={s.color} />
+                                    <g transform="translate(12, -8)">
+                                    <rect x="-2" y="-12" width="70" height="18" fill="rgba(255,255,255,0.9)" rx="4" />
+                                    <text fill={s.color} fontSize="11" fontWeight="bold" fontFamily="Inter, sans-serif">
+                                        {s.qty.toFixed(2)}{s.unit}
+                                    </text>
+                                    </g>
+                                </g>
+                                );
+                            })}
+                            </svg>
+                        </div>
+                        </div>
+
+                        {/* Cards de Cenários */}
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {processedScenarios.map(s => (
+                            <div key={s.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center" style={{ backgroundColor: `${s.color}10` }}>
+                                <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: s.color }}></div>
+                                <h3 className="text-xl font-bold text-slate-800">{s.name}</h3>
+                                </div>
+                                <div className="text-right">
+                                <span className="text-2xl font-black" style={{ color: s.color }}>{s.qty.toFixed(4)}</span>
+                                <span className="text-sm font-bold text-slate-500 ml-1">{s.unit}</span>
+                                </div>
+                            </div>
+
+                            <div className="p-6 flex-1 space-y-6">
+                                {s.nextMilestone && !s.isWaiting ? (
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
+                                    <Icons.AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                    <p className="text-sm font-semibold text-blue-900">Próximo Marco Analítico</p>
+                                    <p className="text-sm text-blue-700 mt-0.5">
+                                        Cairá abaixo de <strong>{s.nextMilestone.percentage}%</strong> do pico 
+                                        ({s.nextMilestone.targetQuantity.toFixed(2)}{s.unit}) em <strong>{formatFriendlyDate(s.nextMilestone.timestamp)}</strong>.
+                                    </p>
+                                    </div>
+                                </div>
+                                ) : s.isWaiting && (
+                                <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 flex items-center gap-3">
+                                    <Icons.Timer className="w-5 h-5 text-slate-500" />
+                                    <p className="text-sm font-medium text-slate-600">Aguardando início da primeira ingestão...</p>
+                                </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">% Restante</span>
+                                    <Icons.Percent className="w-4 h-4 text-slate-400" />
+                                    </div>
+                                    <div className="text-xl font-black text-slate-800">{s.percentRemaining.toFixed(1)}%</div>
+                                    <div className="text-xs text-slate-400 font-medium mt-1">do pico ({s.peak.toFixed(1)}{s.unit})</div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">% Eliminado</span>
+                                    <Icons.TrendingDown className="w-4 h-4 text-slate-400" />
+                                    </div>
+                                    <div className="text-xl font-black text-slate-800">{s.percentEliminated.toFixed(1)}%</div>
+                                    <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                                    <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${s.percentEliminated}%` }}></div>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tempo Decorrido</span>
+                                    <Icons.Clock className="w-4 h-4 text-slate-400" />
+                                    </div>
+                                    <div className="text-lg font-bold text-slate-800">{formatDuration(s.elapsedTotalMs)}</div>
+                                    <div className="text-xs text-slate-400 font-medium mt-1">desde a 1ª dose</div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Próxima Meia-vida</span>
+                                    <Icons.RotateCcw className="w-4 h-4 text-slate-400" />
+                                    </div>
+                                    <div className="text-sm font-bold text-slate-800 mt-1">{formatFriendlyDate(s.nextHalfLifeTs)}</div>
+                                </div>
+                                </div>
+
+                                <div>
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2 mb-3">
+                                    <Icons.ListChecks className="w-4 h-4 text-blue-500" /> Histórico / Previsão de Marcos
+                                </h4>
+                                <div className="overflow-x-auto rounded-lg border border-slate-100">
+                                    <table className="w-full text-xs text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                                        <tr>
+                                        <th className="px-3 py-2">Marco (%)</th>
+                                        <th className="px-3 py-2">Qtd ({s.unit})</th>
+                                        <th className="px-3 py-2 text-right">Data/Hora Exata</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {s.milestones.map((m, i) => {
+                                        const isPast = m.timestamp && m.timestamp < now;
+                                        return (
+                                            <tr key={i} className={`${isPast ? 'bg-slate-50/50 opacity-60' : 'bg-white'} hover:bg-slate-50 transition`}>
+                                            <td className={`px-3 py-2 font-medium ${isPast ? 'text-slate-500' : 'text-slate-800'}`}>
+                                                {m.label}
+                                            </td>
+                                            <td className="px-3 py-2 text-slate-600 font-mono">
+                                                {m.targetQuantity.toFixed(2)}
+                                            </td>
+                                            <td className={`px-3 py-2 text-right font-medium ${isPast ? 'text-slate-500' : 'text-blue-600'}`}>
+                                                {formatFriendlyDate(m.timestamp)}
+                                            </td>
+                                            </tr>
+                                        );
+                                        })}
+                                    </tbody>
+                                    </table>
+                                </div>
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 pt-4">
+                                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                                    <Icons.Plus className="w-4 h-4 text-blue-600" /> Registrar Nova Dose
+                                </h4>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                    type="number" min="0" step="any" placeholder={`Quantidade (${s.unit})`}
+                                    value={quickAdd[s.id]?.amount || ''}
+                                    onChange={(e) => handleQuickAddChange(s.id, 'amount', e.target.value)}
+                                    className="flex-1 px-3 py-2 text-sm rounded-md border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    />
+                                    <div className="flex-1 flex gap-1">
+                                    <input
+                                        type="datetime-local"
+                                        value={quickAdd[s.id]?.time || ''}
+                                        onChange={(e) => handleQuickAddChange(s.id, 'time', e.target.value)}
+                                        className="w-full px-3 py-2 text-sm rounded-md border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetQuickAddNow(s.id)}
+                                        className="p-2 bg-white border border-slate-300 text-slate-500 rounded-md hover:bg-slate-100 hover:text-blue-600 transition"
+                                        title="Usar horário atual"
+                                    >
+                                        <Icons.Clock className="w-4 h-4" />
+                                    </button>
+                                    </div>
+                                    <button
+                                    onClick={() => handleSubmitQuickAdd(s.id)}
+                                    disabled={!quickAdd[s.id]?.amount || !quickAdd[s.id]?.time}
+                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                    >
+                                    <Icons.Plus className="w-4 h-4" /> Incluir
+                                    </button>
+                                </div>
+                                </div>
+
+                            </div>
+                            </div>
+                        ))}
+                        </div>
+
+                    </div>
+                    )}
+                </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
