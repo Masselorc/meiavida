@@ -37,12 +37,9 @@
             AlertCircle: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
             Percent: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
             Timer: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></svg>,
-            TrendingDown: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>
+            TrendingDown: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>,
+            TrendingUp: ({className="w-4 h-4"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         };
-
-        // --- Tipagens (Opcional no Babel, mas mantidas por segurança) ---
-        // type MassUnit = 'mcg' | 'mg' | 'g';
-        // type TimeUnit = 'minutes' | 'hours' | 'days';
 
         const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -53,7 +50,7 @@
         };
 
         // --- Funções Auxiliares Matemáticas ---
-        const getHalfLifeMs = (time, unit) => {
+        const getTimeInMs = (time, unit) => {
             const val = parseFloat(time);
             if (isNaN(val)) return 0;
             if (unit === 'hours') return val * 60 * 60 * 1000;
@@ -62,12 +59,25 @@
             return val;
         };
 
-        const getQuantityAt = (timestamp, doses, hLMs) => {
+        const getQuantityAt = (timestamp, doses, hLMs, cmaxMs = 0) => {
             return doses.reduce((sum, d) => {
-                if (timestamp >= d.time && hLMs > 0) {
-                return sum + d.amount * Math.pow(0.5, (timestamp - d.time) / hLMs);
+                if (timestamp < d.time) return sum; // Ainda não foi ingerido
+
+                if (cmaxMs <= 0) {
+                    // Absorção instantânea (comportamento original)
+                    return sum + d.amount * Math.pow(0.5, (timestamp - d.time) / hLMs);
+                } else {
+                    const timeSinceDose = timestamp - d.time;
+                    if (timeSinceDose < cmaxMs) {
+                        // Fase de Absorção: Curva de atenuação senoidal até o Cmax
+                        const absorptionProgress = timeSinceDose / cmaxMs;
+                        return sum + d.amount * Math.sin(absorptionProgress * (Math.PI / 2));
+                    } else {
+                        // Fase de Eliminação: Exponencial a partir do pico
+                        const timeSincePeak = timeSinceDose - cmaxMs;
+                        return sum + d.amount * Math.pow(0.5, timeSincePeak / hLMs);
+                    }
                 }
-                return sum;
             }, 0);
         };
 
@@ -110,6 +120,8 @@
                 color: PALETTE[0],
                 halfLifeTime: '',
                 halfLifeUnit: 'hours',
+                cmaxTime: '0',
+                cmaxUnit: 'minutes',
                 unit: 'mg',
                 doses: [{ id: crypto.randomUUID(), amount: '', time: getDefaultTime() }]
             }]);
@@ -127,7 +139,8 @@
             // --- Processamento Pesado (Memoizado) ---
             const processedScenarios = useMemo(() => {
                 return scenarios.map(scenario => {
-                const hLMs = getHalfLifeMs(scenario.halfLifeTime, scenario.halfLifeUnit);
+                const hLMs = getTimeInMs(scenario.halfLifeTime, scenario.halfLifeUnit);
+                const cmaxMs = getTimeInMs(scenario.cmaxTime, scenario.cmaxUnit);
                 
                 const parsedDoses = scenario.doses
                     .map(d => ({ amount: parseFloat(d.amount) || 0, time: new Date(d.time).getTime() }))
@@ -138,29 +151,37 @@
                 const firstDoseTime = parsedDoses.length > 0 ? parsedDoses[0].time : Date.now();
                 const lastDoseTime = parsedDoses.length > 0 ? parsedDoses[parsedDoses.length - 1].time : Date.now();
 
-                // Peak & Intervals
+                // Peak & Intervals (Agora considerando o tempo de Cmax para achar o pico)
                 let peak = 0;
                 const intervals = [];
                 for (let i = 0; i < parsedDoses.length; i++) {
-                    const t_start = parsedDoses[i].time;
-                    const q_start = getQuantityAt(t_start, parsedDoses, hLMs);
-                    if (q_start > peak) peak = q_start;
+                    const peakTime = parsedDoses[i].time + cmaxMs;
+                    const q_peak = getQuantityAt(peakTime, parsedDoses, hLMs, cmaxMs);
+                    if (q_peak > peak) peak = q_peak;
 
-                    const t_end = i + 1 < parsedDoses.length ? parsedDoses[i+1].time : Infinity;
-                    const q_end = i + 1 < parsedDoses.length ? getQuantityAt(t_end - 1, parsedDoses, hLMs) : 0;
-                    intervals.push({ t_start, t_end, q_start, q_end });
+                    const t_end = i + 1 < parsedDoses.length ? parsedDoses[i+1].time + cmaxMs : Infinity;
+                    const q_end = i + 1 < parsedDoses.length ? getQuantityAt(t_end - 1, parsedDoses, hLMs, cmaxMs) : 0;
+                    intervals.push({ t_start: peakTime, t_end, q_start: q_peak, q_end });
                 }
 
                 // Current Stats
-                const qty = getQuantityAt(now, parsedDoses, hLMs);
+                const qty = getQuantityAt(now, parsedDoses, hLMs, cmaxMs);
                 const activeDose = [...parsedDoses].reverse().find(d => d.time <= now);
                 const isWaiting = !activeDose;
                 
                 let nextHalfLifeTs = null;
+                let isAbsorbing = false;
+
                 if (activeDose && hLMs > 0) {
-                    const elapsedSinceActive = Math.max(0, now - activeDose.time);
-                    const cycle = Math.floor(elapsedSinceActive / hLMs) + 1;
-                    nextHalfLifeTs = activeDose.time + (cycle * hLMs);
+                    const peakTime = activeDose.time + cmaxMs;
+                    if (now < peakTime) {
+                        isAbsorbing = true;
+                        nextHalfLifeTs = peakTime; // Próximo evento é o pico
+                    } else {
+                        const elapsedSincePeak = Math.max(0, now - peakTime);
+                        const cycle = Math.floor(elapsedSincePeak / hLMs) + 1;
+                        nextHalfLifeTs = peakTime + (cycle * hLMs); // Próximo evento é a meia-vida
+                    }
                 }
 
                 const percentRemaining = peak > 0 ? (qty / peak) * 100 : 0;
@@ -170,10 +191,10 @@
                 // Milestones
                 const getFinalTimeForTarget = (targetQ) => {
                     for (let i = intervals.length - 1; i >= 0; i--) {
-                    const interval = intervals[i];
-                    if (targetQ <= interval.q_start && targetQ > interval.q_end) {
-                        return interval.t_start + hLMs * Math.log2(interval.q_start / targetQ);
-                    }
+                        const interval = intervals[i];
+                        if (targetQ <= interval.q_start && targetQ > interval.q_end) {
+                            return interval.t_start + hLMs * Math.log2(interval.q_start / targetQ);
+                        }
                     }
                     return null;
                 };
@@ -202,6 +223,7 @@
                 return {
                     ...scenario,
                     hLMs,
+                    cmaxMs,
                     parsedDoses,
                     totalIngested,
                     firstDoseTime,
@@ -209,6 +231,7 @@
                     peak,
                     qty,
                     isWaiting,
+                    isAbsorbing,
                     nextHalfLifeTs,
                     percentRemaining,
                     percentEliminated,
@@ -225,19 +248,21 @@
                 let maxLast = 0;
                 let maxPeak = 0;
                 let maxHLMs = 0;
+                let maxCmaxMs = 0;
 
                 processedScenarios.forEach(s => {
-                if (s.firstDoseTime < minFirst) minFirst = s.firstDoseTime;
-                if (s.lastDoseTime > maxLast) maxLast = s.lastDoseTime;
-                if (s.peak > maxPeak) maxPeak = s.peak;
-                if (s.hLMs > maxHLMs) maxHLMs = s.hLMs;
+                    if (s.firstDoseTime < minFirst) minFirst = s.firstDoseTime;
+                    if (s.lastDoseTime > maxLast) maxLast = s.lastDoseTime;
+                    if (s.peak > maxPeak) maxPeak = s.peak;
+                    if (s.hLMs > maxHLMs) maxHLMs = s.hLMs;
+                    if (s.cmaxMs > maxCmaxMs) maxCmaxMs = s.cmaxMs;
                 });
 
                 if (minFirst === Infinity) minFirst = Date.now();
                 return {
-                globalFirstTime: minFirst,
-                globalMaxXMs: Math.max(maxHLMs * 5, (maxLast + maxHLMs * 5) - minFirst),
-                globalMaxY: maxPeak * 1.1 || 100
+                    globalFirstTime: minFirst,
+                    globalMaxXMs: Math.max(maxHLMs * 5, (maxLast + maxCmaxMs + maxHLMs * 5) - minFirst),
+                    globalMaxY: maxPeak * 1.1 || 100
                 };
             }, [processedScenarios]);
 
@@ -276,16 +301,21 @@
                 for (let i = 0; i <= steps; i++) {
                     timePoints.add(globalFirstTime + (i / steps) * globalMaxXMs);
                 }
+                
+                // Forçar o renderizador a plotar exatamente o ponto de dose e o pico de absorção
                 s.parsedDoses.forEach(d => {
                     timePoints.add(d.time - 1);
                     timePoints.add(d.time);
+                    if (s.cmaxMs > 0) {
+                        timePoints.add(d.time + s.cmaxMs); 
+                    }
                 });
 
                 const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
                 
                 sortedTimePoints.forEach((t) => {
                     if (t < globalFirstTime || t > globalFirstTime + globalMaxXMs) return;
-                    const q = getQuantityAt(t, s.parsedDoses, s.hLMs);
+                    const q = getQuantityAt(t, s.parsedDoses, s.hLMs, s.cmaxMs);
                     const x = padding + ((t - globalFirstTime) / globalMaxXMs) * graphWidth;
                     const y = padding + graphHeight - (q / globalMaxY) * graphHeight;
                     
@@ -313,6 +343,8 @@
                 color: PALETTE[scenarios.length % PALETTE.length],
                 halfLifeTime: '',
                 halfLifeUnit: 'hours',
+                cmaxTime: '0',
+                cmaxUnit: 'minutes',
                 unit: 'mg',
                 doses: [{ id: crypto.randomUUID(), amount: '', time: getDefaultTime() }]
                 }]);
@@ -437,7 +469,7 @@
                     {!isRunning ? (
                     /* Formulário de Múltiplos Cenários */
                     <form onSubmit={handleStart} className="space-y-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         {scenarios.map((scenario, sIndex) => (
                             <div key={scenario.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
@@ -460,27 +492,51 @@
                             </div>
                             
                             <div className="p-6 space-y-6">
-                                <div className="space-y-2">
-                                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                                    <Icons.RotateCcw className="w-4 h-4" /> Tempo de Meia-vida
-                                </label>
-                                <div className="flex space-x-2">
-                                    <input
-                                    type="number" required step="any" min="0" placeholder="Ex: 5"
-                                    value={scenario.halfLifeTime}
-                                    onChange={(e) => handleUpdateScenario(scenario.id, 'halfLifeTime', e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition"
-                                    />
-                                    <select
-                                    value={scenario.halfLifeUnit}
-                                    onChange={(e) => handleUpdateScenario(scenario.id, 'halfLifeUnit', e.target.value)}
-                                    className="px-4 py-2.5 rounded-lg border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition min-w-[110px]"
-                                    >
-                                    <option value="minutes">Min.</option>
-                                    <option value="hours">Horas</option>
-                                    <option value="days">Dias</option>
-                                    </select>
-                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                            <Icons.RotateCcw className="w-4 h-4" /> Tempo de Meia-vida
+                                        </label>
+                                        <div className="flex space-x-2">
+                                            <input
+                                            type="number" required step="any" min="0" placeholder="Ex: 5"
+                                            value={scenario.halfLifeTime}
+                                            onChange={(e) => handleUpdateScenario(scenario.id, 'halfLifeTime', e.target.value)}
+                                            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                            />
+                                            <select
+                                            value={scenario.halfLifeUnit}
+                                            onChange={(e) => handleUpdateScenario(scenario.id, 'halfLifeUnit', e.target.value)}
+                                            className="px-4 py-2.5 rounded-lg border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition min-w-[100px]"
+                                            >
+                                            <option value="minutes">Min.</option>
+                                            <option value="hours">Horas</option>
+                                            <option value="days">Dias</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                            <Icons.TrendingUp className="w-4 h-4" /> Tempo até Cmax (Pico)
+                                        </label>
+                                        <div className="flex space-x-2">
+                                            <input
+                                            type="number" required step="any" min="0" placeholder="Ex: 45 (0=Instantâneo)"
+                                            value={scenario.cmaxTime}
+                                            onChange={(e) => handleUpdateScenario(scenario.id, 'cmaxTime', e.target.value)}
+                                            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                            />
+                                            <select
+                                            value={scenario.cmaxUnit}
+                                            onChange={(e) => handleUpdateScenario(scenario.id, 'cmaxUnit', e.target.value)}
+                                            className="px-4 py-2.5 rounded-lg border border-slate-300 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition min-w-[100px]"
+                                            >
+                                            <option value="minutes">Min.</option>
+                                            <option value="hours">Horas</option>
+                                            <option value="days">Dias</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-3">
@@ -668,8 +724,10 @@
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Próxima Meia-vida</span>
-                                    <Icons.RotateCcw className="w-4 h-4 text-slate-400" />
+                                    <span className={`text-xs font-bold uppercase tracking-wider ${s.isAbsorbing ? 'text-blue-600' : 'text-slate-500'}`}>
+                                        {s.isAbsorbing ? "Pico (Cmax) em" : "Próxima Meia-vida"}
+                                    </span>
+                                    {s.isAbsorbing ? <Icons.TrendingUp className="w-4 h-4 text-blue-500" /> : <Icons.RotateCcw className="w-4 h-4 text-slate-400" />}
                                     </div>
                                     <div className="text-sm font-bold text-slate-800 mt-1">{formatFriendlyDate(s.nextHalfLifeTs)}</div>
                                 </div>
