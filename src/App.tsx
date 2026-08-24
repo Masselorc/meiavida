@@ -18,7 +18,7 @@ export default function App() {
   const [persistenceEnabled, setPersistenceEnabled] = useState(
     () => localStorage.getItem(CONSENT_KEY) === 'true',
   );
-  const now = useClock(isRunning, 1_000);
+  const [now, refreshNow] = useClock(isRunning, 1_000);
 
   useEffect(() => {
     if (!persistenceEnabled) return;
@@ -38,7 +38,10 @@ export default function App() {
       validateScenario(scenario).map((error) => `${scenario.name || 'Cenário'}: ${error}`),
     );
     setErrors(nextErrors);
-    if (nextErrors.length === 0) setIsRunning(true);
+    if (nextErrors.length === 0) {
+      refreshNow();
+      setIsRunning(true);
+    }
   };
 
   const updateScenario = (updated: Scenario) => {
