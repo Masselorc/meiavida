@@ -23,7 +23,10 @@ export function ScenarioForm({ scenario, canRemove, onChange, onRemove }: Props)
   };
 
   return (
-    <section className="card scenario-card" aria-labelledby={`scenario-${scenario.id}`}>
+    <section
+      className="card scenario-card"
+      aria-labelledby={`scenario-name-${scenario.id}`}
+    >
       <header className="card-header">
         <div className="scenario-title-row">
           <span className="color-dot" style={{ background: scenario.color }} aria-hidden="true" />
