@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Scenario } from '../types';
 
 interface Props {
@@ -15,6 +15,7 @@ export function DataControls({
   onImport,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const exportData = () => {
     const payload = JSON.stringify(
@@ -53,39 +54,50 @@ export function DataControls({
         />
         <span>
           <strong>Salvar localmente neste dispositivo</strong>
-          <small>
-            Desativado por padrão. Nenhum dado é enviado para servidor.
-          </small>
+          <small>Desativado por padrão. Nenhum dado é enviado para servidor.</small>
         </span>
       </label>
-      <div className="button-row">
-        <button type="button" className="secondary" onClick={exportData}>
-          Exportar JSON
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => fileRef.current?.click()}
-        >
-          Importar JSON
-        </button>
-        <input
-          className="sr-only"
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            try {
-              await importData(file);
-            } catch (error) {
-              window.alert(error instanceof Error ? error.message : 'Falha ao importar.');
-            } finally {
-              event.target.value = '';
-            }
-          }}
-        />
+      <div>
+        <div className="button-row">
+          <button type="button" className="secondary" onClick={exportData}>
+            Exportar JSON
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              setImportError(null);
+              fileRef.current?.click();
+            }}
+          >
+            Importar JSON
+          </button>
+          <input
+            className="sr-only"
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              try {
+                await importData(file);
+                setImportError(null);
+              } catch (error) {
+                setImportError(
+                  error instanceof Error ? error.message : 'Falha ao importar.',
+                );
+              } finally {
+                event.target.value = '';
+              }
+            }}
+          />
+        </div>
+        {importError && (
+          <p className="import-error" role="alert">
+            {importError}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -97,6 +109,10 @@ function isValidExport(
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as { schemaVersion?: unknown; scenarios?: unknown };
   return candidate.schemaVersion === 2 && isValidScenarioArray(candidate.scenarios);
+}
+
+function isFiniteNumberOrNull(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
 }
 
 export function isValidScenarioArray(value: unknown): value is Scenario[] {
@@ -113,10 +129,9 @@ export function isValidScenarioArray(value: unknown): value is Scenario[] {
       typeof scenario.id !== 'string' ||
       typeof scenario.name !== 'string' ||
       typeof scenario.color !== 'string' ||
-      (scenario.halfLifeValue !== null &&
-        typeof scenario.halfLifeValue !== 'number') ||
+      !isFiniteNumberOrNull(scenario.halfLifeValue) ||
       !validTimeUnits.has(String(scenario.halfLifeUnit)) ||
-      (scenario.tmaxValue !== null && typeof scenario.tmaxValue !== 'number') ||
+      !isFiniteNumberOrNull(scenario.tmaxValue) ||
       !validTimeUnits.has(String(scenario.tmaxUnit)) ||
       !validMassUnits.has(String(scenario.displayUnit)) ||
       !Array.isArray(scenario.doses) ||
@@ -130,7 +145,7 @@ export function isValidScenarioArray(value: unknown): value is Scenario[] {
       const item = dose as { id?: unknown; amountMg?: unknown; time?: unknown };
       return (
         typeof item.id === 'string' &&
-        (item.amountMg === null || typeof item.amountMg === 'number') &&
+        isFiniteNumberOrNull(item.amountMg) &&
         typeof item.time === 'string'
       );
     });
